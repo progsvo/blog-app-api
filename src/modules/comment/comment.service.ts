@@ -106,10 +106,29 @@ const updateComment = async (commentId: string, data: { content?: string, status
     })
 }
 
+const moderateComment = async (id: string, data: { status: CommentStatus }) => {
+    console.log({ id, data })
+    const commentData = await prisma.comment.findUnique({
+        where: {
+            id: id
+        }
+    })
+    if (!commentData) {
+        throw new Error("Your provide input is invalid")
+    }
+    return await prisma.comment.update({
+        where: {
+            id: id
+        },
+        data
+    })
+}
+
 export const commentService = {
     createComment,
     getCommentById,
     getCommentsByAuthor,
     deleteComment,
-    updateComment
+    updateComment,
+    moderateComment
 }
