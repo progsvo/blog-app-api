@@ -177,9 +177,193 @@ const getPostById = async (postId: string) => {
     })
     return result;
 }
+const getMyPosts = async (authorId: string) => {
+    await prisma.user.findUniqueOrThrow({
+        where: {
+            id: authorId,
+            status: 'ACTIVE'
+        },
+        select: {
+            id: true,
+            status: true
+        }
+    })
+
+    const result = await prisma.post.findMany({
+        where: {
+            authorId: authorId
+        },
+        orderBy: {
+            createdAt: "desc"
+        },
+        include: {
+            _count: {
+                select: {
+                    comments: true
+                }
+            }
+        }
+    })
+    // const total = await prisma.post.aggregate({
+    //     _count: {
+    //         id: true
+    //     },
+    //     where: {
+    //         authorId: authorId
+    //     },
+    // })
+    return result;
+}
+
+
+const updatePost = async (postId: string, data: Partial<Post>, authorId: string, isAdmin: boolean) => {
+    const postData = await prisma.post.findUniqueOrThrow({
+        where: {
+            id: postId,
+        },
+        select: {
+            id: true,
+            authorId: true
+        }
+    })
+    // admin jodi na hoy ebong athorId jodi match na kore (admin update korte parbe she jodi post er author nao hoye thake)
+    if (!isAdmin && (postData.authorId !== authorId)) {
+        throw new Error("You are not authorized to update this post");
+    }
+    // user isFeature update korte parbe na
+    if (!isAdmin) {
+        delete data.isFeatured
+    }
+    const result = await prisma.post.update({
+        where: {
+            id: postId
+        },
+        data: data
+    })
+    return result;
+}
+
+/* 
+1. user nijer post delete korte parbe
+2. admin jekono post delete korte parbe
+*/
+const deletePost = async (postId: string, authorId: string, isAdmin: boolean) => {
+    const postData = await prisma.post.findUniqueOrThrow({
+        where: {
+            id: postId,
+        },
+        select: {
+            id: true,
+            authorId: true
+        }
+    })
+    // admin jodi na hoy ebong athorId jodi match na kore (admin delete korte parbe she jodi post er author nao hoye thake)
+    if (!isAdmin && (postData.authorId !== authorId)) {
+        throw new Error("You are not authorized to delete this post");
+    }
+    const result = await prisma.post.delete({
+        where: {
+            id: postId
+        }
+    })
+    return result;
+}
+
+const getStats = async () => {
+    /*
+    1. post count
+    2. published post
+    3. draft posts
+    4. totat comments
+    5. totalViews 
+    6. totalUsers
+    7. adminCount
+    8. userCount
+    */
+    return await prisma.$transaction(async (tx) => {
+
+        // ❌ old style ========
+        // const totalPosts = await tx.post.count();
+        // const publishedPosts = await tx.post.count({
+        //     where: {
+        //         status: PostStatus.PUBLISHED
+        //     }
+        // })
+        // const draftPosts = await tx.post.count({
+        //     where: {
+        //         status: PostStatus.DRAFT
+        //     }
+        // })
+        // const archivedPosts = await tx.post.count({
+        //     where: {
+        //         status: PostStatus.ARCHIVED
+        //     }
+        // })
+        // const totalComments = await tx.comment.count();
+        // const totalViews = await tx.post.aggregate({
+        //     _sum: {
+        //         views: true
+        //     }
+        // })
+
+        // ✅ new style ==========
+        const [totalPosts, publishedPosts, draftPosts, archivedPosts, totalComments, totalViews, totalUsers, adminCount, userCount] = await Promise.all([
+            await tx.post.count(),
+            await tx.post.count({
+                where: {
+                    status: PostStatus.PUBLISHED
+                }
+            }),
+            await tx.post.count({
+                where: {
+                    status: PostStatus.DRAFT
+                }
+            }),
+            await tx.post.count({
+                where: {
+                    status: PostStatus.ARCHIVED
+                }
+            }),
+            await tx.comment.count(),
+            await tx.post.aggregate({
+                _sum: {
+                    views: true
+                }
+            }),
+            await tx.user.count(),
+            await tx.user.count({
+                where: {
+                    role: "ADMIN"
+                }
+            }),
+            await tx.user.count({
+                where: {
+                    role: "USER"
+                }
+            })
+        ])
+
+        return {
+            totalPosts,
+            publishedPosts,
+            draftPosts,
+            archivedPosts,
+            totalComments,
+            totalViews: totalViews._sum.views,
+            totalUsers,
+            adminCount,
+            userCount
+        }
+    })
+
+}
 
 export const postService = {
     createPost,
     getAllPosts,
-    getPostById
+    getPostById,
+    getMyPosts,
+    updatePost,
+    deletePost,
+    getStats
 }

@@ -2,6 +2,8 @@ import { Request, Response } from "express";
 import { postService } from "./post.service";
 import { PostStatus } from "../../../generated/prisma/enums";
 import paginationSortingHelper from "../../helpers/paginationSortingHelper";
+import console from "console";
+import { UserRole } from "../../middleware/auth";
 const createPost = async (req: Request, res: Response) => {
     try {
         const user = req.user;
@@ -98,8 +100,99 @@ const getPostById = async (req: Request, res: Response) => {
     }
 }
 
+const getMyPosts = async (req: Request, res: Response) => {
+    try {
+        const user = req.user;
+        if (!user) {
+            throw new Error("Your are unauthorized");
+        }
+        const result = await postService.getMyPosts(user?.id as string);
+        res.status(200).json({
+            success: true,
+            message: "Posts fetched successfully",
+            data: result
+        });
+
+    } catch (error) {
+        res.status(400).json({
+            error: 'Own posts Fetching failed',
+            details: error
+        })
+    }
+}
+
+const updatePost = async (req: Request, res: Response) => {
+    try {
+        const user = req.user;
+        if (!user) {
+            throw new Error("Your are unauthorized");
+        }
+        const { postId } = req.params;
+        const isAdmin = user.role === UserRole.ADMIN
+        const result = await postService.updatePost(postId as string, req.body, user.id as string, isAdmin);
+        res.status(200).json({
+            success: true,
+            message: "Post updated successfully",
+            data: result
+        });
+
+    } catch (error) {
+        const errorMessage = (error instanceof Error) ? error.message : 'Post update failed'
+        res.status(400).json({
+            error: errorMessage,
+            details: error
+        })
+    }
+}
+
+const deletePost = async (req: Request, res: Response) => {
+    try {
+        const user = req.user;
+        if (!user) {
+            throw new Error("Your are unauthorized");
+        }
+        const { postId } = req.params;
+        const isAdmin = user.role === UserRole.ADMIN
+        const result = await postService.deletePost(postId as string, user.id as string, isAdmin);
+        res.status(200).json({
+            success: true,
+            message: "Post deleted successfully",
+            data: result
+        });
+
+    } catch (error) {
+        const errorMessage = (error instanceof Error) ? error.message : 'Post delete failed'
+        res.status(400).json({
+            error: errorMessage,
+            details: error
+        })
+    }
+}
+
+const getStats = async (req: Request, res: Response) => {
+    try {
+        const result = await postService.getStats();
+        res.status(200).json({
+            success: true,
+            message: "Post stats fetched successfully",
+            data: result
+        });
+
+    } catch (error) {
+        const errorMessage = (error instanceof Error) ? error.message : 'Stats Fetching failed'
+        res.status(400).json({
+            error: errorMessage,
+            details: error
+        })
+    }
+}
+
 export const postController = {
     createPost,
     getAllPosts,
-    getPostById
+    getPostById,
+    getMyPosts,
+    updatePost,
+    deletePost,
+    getStats
 }
